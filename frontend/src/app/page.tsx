@@ -19,7 +19,9 @@ import ProjectHome from "@/components/dci/ProjectHome";
 import UpdateDocument from "@/components/dci/UpdateDocument";
 import NewDocument from "@/components/dci/NewDocument";
 import ExecutiveSummary from "@/components/dci/ExecutiveSummary";
-
+import ReviewWorkspace from "@/components/review/ReviewWorkspace";
+import CRSWorkspace from "@/components/review/CRSWorkspace";
+import ProjectBanner from "@/components/ProjectBanner";
 import { MOCK_USERS, type MockUser } from "@/lib/auth";
 
 export type TabId =
@@ -37,7 +39,9 @@ export type TabId =
   | "import-export"
   | "library"
   | "viewer"
-  | "tasks";
+  | "tasks"
+  | "internal-review"
+  | "crs";
 
 const DEFAULT_PROJECT_ID = Number(
   process.env.NEXT_PUBLIC_DEFAULT_PROJECT_ID || 1,
@@ -310,6 +314,8 @@ export default function DashboardPage() {
           projectId={projectId}
         />
 
+        <ProjectBanner projectId={projectId} />
+
         <main
           style={{
             flex: 1,
@@ -327,11 +333,17 @@ export default function DashboardPage() {
             />
           )}
 
-          {activeTab === "summary" && <ExecutiveSummary projectId={projectId} />}
+          {activeTab === "summary" && (
+            <ExecutiveSummary projectId={projectId} />
+          )}
 
-          {activeTab === "submission" && <SubmissionProgress projectId={projectId} />}
+          {activeTab === "submission" && (
+            <SubmissionProgress projectId={projectId} />
+          )}
 
-          {activeTab === "review" && <ReviewProgress projectId={projectId} />}
+          {activeTab === "review" && (
+            <ReviewProgress projectId={projectId} />
+          )}
 
           {activeTab === "approval" && (
             <ApprovalStatus projectId={projectId} />
@@ -349,7 +361,13 @@ export default function DashboardPage() {
             <DocumentRegister projectId={projectId} />
           )}
 
-          {activeTab === "new-document" && (<NewDocument projectId={projectId} actorUserId={actorUserId} onCreated={() => setActiveTab("update")} />)}
+          {activeTab === "new-document" && (
+            <NewDocument
+              projectId={projectId}
+              actorUserId={actorUserId}
+              onCreated={() => setActiveTab("update")}
+            />
+          )}
 
           {activeTab === "update" && (
             <UpdateDocument
@@ -369,6 +387,18 @@ export default function DashboardPage() {
             />
           )}
 
+          {activeTab === "internal-review" && (
+            <ReviewWorkspace
+              projectId={projectId}
+              user={user}
+              onOpenCRS={() => setActiveTab("crs")}
+            />
+          )}
+
+          {activeTab === "crs" && (
+            <CRSWorkspace projectId={projectId} user={user} />
+          )}
+
           {activeTab === "library" && (
             <DocumentLibrary
               user={user}
@@ -381,6 +411,7 @@ export default function DashboardPage() {
             <DocumentViewer
               user={user}
               fileId={viewerFileId}
+              projectId={projectId}
             />
           )}
 

@@ -135,3 +135,21 @@ export const updateMasterData = (projectId: number, payload: MasterData) =>
   api.put('/dci/master-data', payload, { params: { project_id: projectId } }).then(r => r.data as MasterData);
 export const createDCIDocument = (projectId: number, payload: Record<string, unknown>) =>
   api.post('/dci/documents', payload, { params: { project_id: projectId } }).then(r => r.data);
+
+
+// Internal review cycles and live CRS
+export const getReviewCycles = (projectId: number, documentId?: number) => api.get("/reviews/cycles", { params: { project_id: projectId, document_id: documentId } }).then(r => r.data);
+export const createReviewCycle = (payload: Record<string, unknown>) => api.post("/reviews/cycles", payload).then(r => r.data);
+export const getReviewComments = (projectId: number, params: Record<string, unknown> = {}) => api.get("/reviews/comments", { params: { project_id: projectId, ...params } }).then(r => r.data);
+export const createReviewComment = (payload: Record<string, unknown>) => api.post("/reviews/comments", payload).then(r => r.data);
+export const editReviewComment = (id: string, payload: Record<string, unknown>) => api.patch(`/reviews/comments/${id}`, payload).then(r => r.data);
+export const addReviewResponse = (id: string, payload: Record<string, unknown>) => api.post(`/reviews/comments/${id}/responses`, payload).then(r => r.data);
+export const resolveReviewComment = (id: string, payload: Record<string, unknown>) => api.post(`/reviews/comments/${id}/resolve`, payload).then(r => r.data);
+export const reopenReviewComment = (id: string, payload: Record<string, unknown>) => api.post(`/reviews/comments/${id}/reopen`, payload).then(r => r.data);
+export const generateCommentedSnapshot = (payload: Record<string, unknown>) => api.post("/reviews/snapshots/generate", payload).then(r => r.data);
+export const getDocumentVersions = (documentId: number) => api.get(`/reviews/versions/${documentId}`).then(r => r.data);
+export const crsExportUrl = (projectId: number, documentId?: number, status?: string) => { const q = new URLSearchParams({ project_id: String(projectId) }); if (documentId) q.set("document_id", String(documentId)); if (status) q.set("status", status); return `${API_URL}/reviews/crs/export.csv?${q.toString()}`; };
+
+export const getNotifications = (userId:string) => api.get("/notifications/",{params:{user_id:userId}}).then(r=>r.data);
+export const markNotificationRead = (recipientId:string) => api.post(`/notifications/${recipientId}/read`).then(r=>r.data);
+export const markAllNotificationsRead = (userId:string) => api.post("/notifications/read-all",null,{params:{user_id:userId}}).then(r=>r.data);

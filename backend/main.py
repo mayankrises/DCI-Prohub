@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.routers import annotations, dci, documents, imports, locks, projects, tasks, users
+from backend.routers import annotations, dci, documents, imports, locks, projects, reviews, tasks, users, notifications
 
 app = FastAPI(
     title="DCI ProHub API",
@@ -49,7 +49,9 @@ app.include_router(documents.router, prefix="/documents", tags=["Project Documen
 app.include_router(annotations.router, prefix="/annotations", tags=["Annotations"])
 app.include_router(locks.router, prefix="/locks", tags=["Document Locks"])
 app.include_router(tasks.router, prefix="/tasks", tags=["Tasks"])
+app.include_router(reviews.router, prefix="/reviews", tags=["Internal Review / CRS"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
+app.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 
 
 @app.get("/")

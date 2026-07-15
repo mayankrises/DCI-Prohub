@@ -80,7 +80,7 @@ class DocumentRepository:
         return result.data[0] if result.data else None
 
     def list_files_for_project(self, project_id: int) -> list[dict]:
-        result = self.supabase.table("document_files").select("*").eq("project_id", project_id).eq("is_current", True).eq("is_deleted", False).order("uploaded_at", desc=True).execute()
+        result = self.supabase.table("document_files").select("*").eq("project_id", project_id).eq("is_current", True).eq("is_deleted", False).eq("file_role", "clean").order("uploaded_at", desc=True).execute()
         return result.data or []
 
     # Backward-compatible alias used by the old router.

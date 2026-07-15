@@ -17,6 +17,8 @@ import {
   UploadCloud,
   Send,
   MessageSquareReply,
+  FileCheck2,
+  TableProperties,
 } from "lucide-react";
 
 import type { TabId } from "@/app/page";
@@ -286,6 +288,20 @@ export default function Sidebar({
       <nav style={sectionStyle}>
         <p style={sectionTitleStyle}>Collaboration</p>
 
+        <NavButton
+          tab="internal-review"
+          label="Internal Review"
+          icon={<FileCheck2 size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="crs"
+          label="Comment Resolution Sheet"
+          icon={<TableProperties size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
         <NavButton
           tab="library"
           label="Doc Library"
