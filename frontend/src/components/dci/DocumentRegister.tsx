@@ -3,9 +3,8 @@ import React, { useEffect, useState } from "react";
 import { Loader2, Search, Download, RefreshCw, FileText } from "lucide-react";
 import { getRegister } from "@/lib/api";
 
-const PROJECT_ID = 1;
 
-export default function DocumentRegister() {
+export default function DocumentRegister({ projectId = 1 }: { projectId?: number }) {
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -17,7 +16,7 @@ export default function DocumentRegister() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await getRegister(PROJECT_ID, page, search);
+      const res = await getRegister(projectId, page, search);
       setData(res.data || []);
       setTotal(res.total || 0);
     } catch { setData([]); setTotal(0); }

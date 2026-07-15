@@ -4,6 +4,11 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, date
 import hashlib
+import zipfile
+
+TEMPLATE_ENGINE_VERSION = 2
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_CONSECUTIVE_EMPTY_ROWS = 25
 
 # Core workbook parser and inspector services extracted from dashboard.py
 # ----------------------------------------------------------------------------
@@ -657,5 +662,4 @@ def list_projects(supabase):
 def get_project(supabase, project_id):
     res = supabase.table("projects").select("*").eq("id", project_id).single().execute()
     return res.data
-
 

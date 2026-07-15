@@ -1,9 +1,12 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, PinIcon, Square, Highlighter, Pen, Loader2, CheckCircle, MessageCircle, X, ChevronRight } from "lucide-react";
+import { Eye, PinIcon, Square, Highlighter, Pen, Loader2, CheckCircle, MessageCircle, X, ChevronRight, Maximize2, Minimize2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import type { MockUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/auth";
-import { getSignedUrl, getAnnotations, createAnnotation, resolveAnnotation, addReply } from "@/lib/api";
+import {
+  getSignedUrl, getAnnotations, createAnnotation, resolveAnnotation, addReply,
+  acquireDocumentLock, heartbeatDocumentLock, releaseDocumentLock,
+} from "@/lib/api";
 
 type AnnotationType = "pin" | "rectangle" | "highlight" | "freehand";
 
@@ -18,6 +21,14 @@ interface Annotation {
   created_at: string;
   style?: Record<string, unknown>;
   replies?: Reply[];
+}
+
+interface LockLease {
+  acquired: boolean;
+  lock_id?: string;
+  lock_token?: string;
+  owner?: string;
+  expires_at?: string;
 }
 
 interface Reply {
@@ -57,6 +68,11 @@ export default function DocumentViewer({ user, fileId }: Props) {
   const [drawPoints, setDrawPoints] = useState<{x:number;y:number}[]>([]);
   const [dragStart, setDragStart] = useState<{x:number;y:number}|null>(null);
   const [saving, setSaving] = useState(false);
+  const [lockLease, setLockLease] = useState<LockLease | null>(null);
+  const [lockMessage, setLockMessage] = useState("");
+  const [annotationMode, setAnnotationMode] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(true);
   const canvasRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -71,12 +87,48 @@ export default function DocumentViewer({ user, fileId }: Props) {
   useEffect(() => {
     if (!fileId) return;
     setLoading(true);
-    getSignedUrl(fileId)
+    getSignedUrl(fileId, user?.id || "system")
       .then(d => setSignedUrl(d.signed_url))
       .catch(() => setSignedUrl(null))
       .finally(() => setLoading(false));
     fetchAnnotations();
-  }, [fileId, fetchAnnotations]);
+  }, [fileId, fetchAnnotations, user?.id]);
+
+  useEffect(() => {
+    if (!fileId || !user || !hasPermission(user, "add_annotation")) {
+      setLockLease(null);
+      return;
+    }
+
+    let active = true;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let acquiredLease: LockLease | null = null;
+
+    acquireDocumentLock(fileId, user.id)
+      .then((lease: LockLease) => {
+        if (!active) return;
+        acquiredLease = lease;
+        setLockLease(lease);
+        setLockMessage(lease.acquired ? "Edit lock acquired" : "This file is currently being edited by another user.");
+        if (lease.acquired && lease.lock_id && lease.lock_token) {
+          heartbeatTimer = setInterval(() => {
+            void heartbeatDocumentLock(lease.lock_id!, lease.lock_token!, user.id).catch(() => {
+              setLockLease(null);
+              setLockMessage("Edit lock expired. Reopen the file to continue annotating.");
+            });
+          }, 60000);
+        }
+      })
+      .catch(() => setLockMessage("Could not acquire the edit lock."));
+
+    return () => {
+      active = false;
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (acquiredLease?.acquired && acquiredLease.lock_id && acquiredLease.lock_token) {
+        void releaseDocumentLock(acquiredLease.lock_id, acquiredLease.lock_token, user.id).catch(() => undefined);
+      }
+    };
+  }, [fileId, user]);
 
   const getRelativeCoords = (e: React.MouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -88,7 +140,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
   };
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (!hasPermission(user, "add_annotation")) return;
+    if (!hasPermission(user, "add_annotation") || !lockLease?.acquired) return;
     const coords = getRelativeCoords(e);
     if (activeTool === "pin") {
       setPendingGeo({ x: coords.x, y: coords.y });
@@ -127,7 +179,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
   };
 
   const saveAnnotation = async () => {
-    if (!pendingGeo || !user || !fileId) return;
+    if (!pendingGeo || !user || !fileId || !lockLease?.lock_token) return;
     setSaving(true);
     try {
       await createAnnotation({
@@ -137,6 +189,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
         geometry: pendingGeo,
         comment_text: commentText,
         actor_user_id: user.id,
+        lock_token: lockLease.lock_token,
         style: { stroke: activeColor, stroke_width: 2 }
       });
       setPendingGeo(null);
@@ -182,10 +235,15 @@ export default function DocumentViewer({ user, fileId }: Props) {
   const resolvedAnnotations = annotations.filter(a => a.status === "resolved");
 
   return (
-    <div className="fade-in" style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, height: "calc(100vh - 104px)" }}>
+    <div className="fade-in" style={{ display: "grid", gridTemplateColumns: commentsOpen ? "minmax(0,1fr) 320px" : "minmax(0,1fr)", gap: 16, height: fullscreen ? "100vh" : "calc(100vh - 104px)", position: fullscreen ? "fixed" : "relative", inset: fullscreen ? 0 : undefined, zIndex: fullscreen ? 1000 : undefined, background: "var(--bg-app)", padding: fullscreen ? 16 : 0 }}>
 
       {/* Left: PDF + annotation canvas */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
+        {user && lockMessage && (
+          <div className="card" style={{ padding: "8px 12px", fontSize: 12, color: lockLease?.acquired ? "#16A34A" : "#D97706" }}>
+            {lockMessage}
+          </div>
+        )}
         {/* Toolbar */}
         <div className="card" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Tool:</span>
@@ -206,6 +264,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
               </button>
             ))}
           </div>
+          <button className={annotationMode ? "btn-primary" : "btn-ghost"} style={{fontSize:12}} onClick={() => setAnnotationMode(v => !v)}>{annotationMode ? "Finish annotating" : "Annotate"}</button>
           <div style={{ width: 1, height: 20, background: "var(--border)" }} />
           <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Color:</span>
           <div style={{ display: "flex", gap: 5 }}>
@@ -217,6 +276,10 @@ export default function DocumentViewer({ user, fileId }: Props) {
                   cursor: "pointer", transition: "all 0.15s"
                 }} />
             ))}
+          </div>
+          <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+            <button className="icon-button" title={commentsOpen ? "Hide comments" : "Show comments"} onClick={() => setCommentsOpen(v => !v)}>{commentsOpen ? <PanelRightClose size={16}/> : <PanelRightOpen size={16}/>}</button>
+            <button className="icon-button" title={fullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={() => setFullscreen(v => !v)}>{fullscreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}</button>
           </div>
         </div>
 
@@ -244,7 +307,8 @@ export default function DocumentViewer({ user, fileId }: Props) {
                 style={{
                   position: "absolute", inset: 0,
                   cursor: activeTool === "freehand" ? "crosshair" : activeTool === "pin" ? "pointer" : "crosshair",
-                  zIndex: 5
+                  zIndex: 5,
+                  pointerEvents: annotationMode ? "auto" : "none"
                 }}
               >
                 {/* Render existing annotations */}
@@ -304,7 +368,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
       </div>
 
       {/* Right: Annotation panel */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "auto" }}>
+      <div style={{ display: commentsOpen ? "flex" : "none", flexDirection: "column", gap: 12, overflow: "auto" }}>
 
         {/* Add annotation form */}
         {pendingGeo && (

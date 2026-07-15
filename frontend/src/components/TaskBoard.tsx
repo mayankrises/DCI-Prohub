@@ -15,7 +15,7 @@ interface Task {
   created_at: string;
 }
 
-interface Props { user: MockUser | null; }
+interface Props { user: MockUser | null; projectId?: number; }
 
 const STATUS_COLUMNS = [
   { id: "unassigned",  label: "Unassigned",   color: "#475569", icon: <Circle size={13} /> },
@@ -28,9 +28,8 @@ const PRIORITY_BADGE: Record<string, string> = {
   low: "badge-gray", normal: "badge-indigo", high: "badge-yellow", critical: "badge-red"
 };
 
-const DEMO_PROJECT_ID = 1;
 
-export default function TaskBoard({ user }: Props) {
+export default function TaskBoard({ user, projectId = 1 }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -44,11 +43,11 @@ export default function TaskBoard({ user }: Props) {
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getTasks(DEMO_PROJECT_ID);
+      const data = await getTasks(projectId);
       setTasks(data || []);
     } catch { setTasks([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -57,7 +56,7 @@ export default function TaskBoard({ user }: Props) {
     setSaving(true);
     try {
       await createTask({
-        project_id: DEMO_PROJECT_ID,
+        project_id: projectId,
         title: title.trim(),
         description,
         priority,

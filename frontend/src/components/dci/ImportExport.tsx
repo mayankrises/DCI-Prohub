@@ -5,9 +5,8 @@ import {
   Upload, Download, FileSpreadsheet, CheckCircle, AlertTriangle,
   Loader2, RefreshCw, Eye, ChevronRight, Database
 } from "lucide-react";
-import { listImports, uploadWorkbook, previewImport, exportDocuments } from "@/lib/api";
+import { listImports, uploadWorkbook, previewImport, exportWorkbookUrl, exportHistoryUrl } from "@/lib/api";
 
-const PROJECT_ID = 1;
 
 interface ImportRecord {
   id: number;
@@ -31,7 +30,7 @@ interface PreviewRow {
   uploaded_date: string;
 }
 
-export default function ImportExport() {
+export default function ImportExport({ projectId, actorUserId = "system" }: { projectId: number; actorUserId?: string }) {
   const [imports, setImports] = useState<ImportRecord[]>([]);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -45,14 +44,14 @@ export default function ImportExport() {
   const fetchImports = useCallback(async () => {
     setLoadingList(true);
     try {
-      const data = await listImports(PROJECT_ID);
+      const data = await listImports(projectId);
       setImports(data || []);
     } catch {
       setImports([]);
     } finally {
       setLoadingList(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => { fetchImports(); }, [fetchImports]);
 
@@ -78,7 +77,7 @@ export default function ImportExport() {
     try {
       const form = new FormData();
       form.append("file", pendingFile);
-      form.append("project_id", String(PROJECT_ID));
+      form.append("project_id", String(projectId));
       const result = await uploadWorkbook(form);
       setUploadResult(result);
       setPendingFile(null);
@@ -114,7 +113,8 @@ export default function ImportExport() {
     }
   };
 
-  const exportUrl = exportDocuments(PROJECT_ID);
+  const exportUrl = exportWorkbookUrl(projectId, actorUserId);
+  const historyUrl = exportHistoryUrl(projectId, actorUserId);
 
   return (
     <div className="fade-in">
@@ -252,6 +252,11 @@ export default function ImportExport() {
               disabled={imports.length === 0}
             >
               <Download size={14} /> Download as Excel
+            </button>
+          </a>
+          <a href={historyUrl} download style={{ textDecoration: "none", display: "block", marginTop: 8 }}>
+            <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 13 }} disabled={imports.length === 0}>
+              <Database size={14} /> Download History Report
             </button>
           </a>
         </div>

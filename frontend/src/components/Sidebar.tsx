@@ -1,356 +1,456 @@
 "use client";
-import React, { useState } from "react";
+
+import React, { useEffect, useState } from "react";
 import {
-  Bell, Settings, LogIn, LogOut, ChevronDown, Check, Info, X,
-  BarChart2, Building2, Clock, FileText, FolderOpen, Eye, CheckSquare,
-  FileSpreadsheet, Calendar, Filter, SlidersHorizontal, RefreshCw
+  BarChart2,
+  Building2,
+  CheckSquare,
+  Clock,
+  Eye,
+  FileText,
+  FolderOpen,
+  History,
+  Home,
+  LogIn,
+  LogOut,
+  PencilLine, FilePlus2,
+  UploadCloud,
+  Send,
+  MessageSquareReply,
 } from "lucide-react";
+
 import type { TabId } from "@/app/page";
 import type { MockUser } from "@/lib/auth";
-import { ROLE_LABELS, ROLE_COLORS } from "@/lib/auth";
+import { ROLE_COLORS, ROLE_LABELS } from "@/lib/auth";
 
 interface Props {
   user: MockUser | null;
-  setUser: (u: MockUser | null) => void;
+  setUser: (user: MockUser | null) => void;
   users: MockUser[];
   activeTab: TabId;
-  setActiveTab: (t: TabId) => void;
+  setActiveTab: (tab: TabId) => void;
   width: number;
 }
 
-const SAMPLE_NOTIFICATIONS = [
-  { id: 1, type: "error",   text: "cow.pdf uploaded to Document Library",   time: "2 min ago",  read: false },
-  { id: 2, type: "warning", text: "5 documents are overdue for review",      time: "1 hr ago",   read: false },
-  { id: 3, type: "success", text: "Annotation resolved by Anita Verma",      time: "3 hr ago",   read: true  },
-  { id: 4, type: "info",    text: "Task Board — 2 new tasks assigned",       time: "Yesterday",  read: true  },
-];
+const DEFAULT_SIDEBAR_WIDTH = 240;
 
-interface NavGroupProps {
+interface NavButtonProps {
+  tab: TabId;
   label: string;
-  children: React.ReactNode;
-}
-function NavGroup({ label, children }: NavGroupProps) {
-  return (
-    <div style={{ padding: "10px 8px 4px" }}>
-      <p style={{
-        fontSize: 9, fontWeight: 700, color: "var(--text-muted)",
-        textTransform: "uppercase", letterSpacing: "0.1em",
-        padding: "2px 8px 6px"
-      }}>{label}</p>
-      {children}
-    </div>
-  );
-}
-
-interface NavBtnProps {
   icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  badge?: number;
-  onClick: () => void;
+  activeTab: TabId;
+  setActiveTab: (tab: TabId) => void;
 }
-function NavBtn({ icon, label, active, badge, onClick }: NavBtnProps) {
+
+function NavButton({
+  tab,
+  label,
+  icon,
+  activeTab,
+  setActiveTab,
+}: NavButtonProps) {
   return (
     <button
-      className={`nav-item${active ? " active" : ""}`}
-      onClick={onClick}
+      type="button"
+      className={`nav-item ${activeTab === tab ? "active" : ""}`}
+      onClick={() => setActiveTab(tab)}
     >
       {icon}
-      <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
-      {badge != null && badge > 0 && (
-        <span style={{
-          minWidth: 16, height: 16, borderRadius: 999,
-          background: active ? "rgba(255,255,255,0.3)" : "var(--accent)",
-          color: "white", fontSize: 9, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px"
-        }}>{badge}</span>
-      )}
+      {label}
     </button>
   );
 }
 
-export default function Sidebar({ user, setUser, users, activeTab, setActiveTab, width }: Props) {
-  const [selected, setSelected]       = useState(users[0].id);
-  const [notifOpen, setNotifOpen]     = useState(false);
-  const [settOpen,  setSettOpen]      = useState(false);
-  const [filterOpen, setFilterOpen]   = useState(false);
-  const [notifs, setNotifs]           = useState(SAMPLE_NOTIFICATIONS);
-  const [pageSize, setPageSize]       = useState("50");
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  color: "var(--text-muted)",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  padding: "4px 8px 6px",
+};
 
-  const unread = notifs.filter(n => !n.read).length;
+const sectionStyle: React.CSSProperties = {
+  padding: "12px 8px 4px",
+  borderBottom: "1px solid var(--border)",
+};
+
+export default function Sidebar({
+  user,
+  setUser,
+  users,
+  activeTab,
+  setActiveTab,
+  width,
+}: Props) {
+  /*
+   * Important hydration fix:
+   * The server and the browser's first render both use 240px.
+   * The width received from the parent is applied only after mounting.
+   */
+  const [mounted, setMounted] = useState(false);
+  const [selected, setSelected] = useState("");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!selected && users.length > 0) {
+      setSelected(users[0].id);
+    }
+
+    if (selected && !users.some((candidate) => candidate.id === selected)) {
+      setSelected(users[0]?.id ?? "");
+    }
+  }, [selected, users]);
+
+  const renderedWidth = mounted ? width : DEFAULT_SIDEBAR_WIDTH;
 
   const handleLogin = () => {
-    const found = users.find(u => u.id === selected);
-    if (found) setUser(found);
+    const found = users.find((candidate) => candidate.id === selected);
+
+    if (found) {
+      setUser(found);
+    }
   };
 
-  const toggle = (panel: "notif" | "sett" | "filter") => {
-    if (panel === "notif")  { setNotifOpen(v => !v); setSettOpen(false); setFilterOpen(false); }
-    if (panel === "sett")   { setSettOpen(v => !v);  setNotifOpen(false); setFilterOpen(false); }
-    if (panel === "filter") { setFilterOpen(v => !v); setNotifOpen(false); setSettOpen(false); }
+  const handleLogout = () => {
+    setUser(null);
   };
 
   return (
-    <aside className="sidebar" style={{ width, minWidth: width, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-
-      {/* ── Brand ── */}
-      <div style={{ padding: "14px 14px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+    <aside
+      className="sidebar"
+      style={{
+        width: renderedWidth,
+        minWidth: renderedWidth,
+      }}
+    >
+      {/* Brand */}
+      <div
+        style={{
+          padding: 16,
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 7, background: "var(--accent)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
-          }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 7,
+              background: "var(--accent)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
             </svg>
           </div>
+
           <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1 }}>DCI ProHub</p>
-            <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>Document Control Intelligence</p>
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: "var(--text-primary)",
+                lineHeight: 1,
+              }}
+            >
+              DCI ProHub
+            </p>
+            <p
+              style={{
+                fontSize: 10,
+                color: "var(--text-muted)",
+                marginTop: 1,
+              }}
+            >
+              Document Control
+            </p>
           </div>
         </div>
       </div>
 
-      {/* ── Scrollable nav body ── */}
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+      {/* Workspace */}
+      <nav style={sectionStyle}>
+        <p style={sectionTitleStyle}>Workspace</p>
+        <NavButton
+          tab="home"
+          label="Project Home"
+          icon={<Home size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+      </nav>
 
-        {/* DCI Dashboard */}
-        <div style={{ borderBottom: "1px solid var(--border)" }}>
-          <NavGroup label="DCI Dashboard">
-            <NavBtn icon={<BarChart2 size={13} />}     label="Approval Status"    active={activeTab === "approval"}  onClick={() => setActiveTab("approval")} />
-            <NavBtn icon={<Building2 size={13} />}     label="Vendor Analysis"    active={activeTab === "vendor"}    onClick={() => setActiveTab("vendor")} />
-            <NavBtn icon={<Clock size={13} />}         label="Delays & Aging"     active={activeTab === "delays"}    onClick={() => setActiveTab("delays")} />
-            <NavBtn icon={<FileText size={13} />}      label="Document Register"  active={activeTab === "register"}  onClick={() => setActiveTab("register")} />
-            <NavBtn icon={<Calendar size={13} />}      label="Doc Timeline"       active={activeTab === "timeline"}  onClick={() => setActiveTab("timeline")} />
-          </NavGroup>
-        </div>
+      {/* DCI Dashboard */}
+      <nav style={sectionStyle}>
+        <p style={sectionTitleStyle}>DCI Dashboard</p>
 
-        {/* Data Management */}
-        <div style={{ borderBottom: "1px solid var(--border)" }}>
-          <NavGroup label="Data Management">
-            <NavBtn icon={<FileSpreadsheet size={13} />} label="Import / Export"  active={activeTab === "import-export"} onClick={() => setActiveTab("import-export")} />
-          </NavGroup>
-        </div>
+        <NavButton
+          tab="submission"
+          label="Submission Progress"
+          icon={<Send size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="review"
+          label="Review Progress"
+          icon={<MessageSquareReply size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="approval"
+          label="Approval Status"
+          icon={<BarChart2 size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="vendor"
+          label="Vendor Analysis"
+          icon={<Building2 size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="delays"
+          label="Delays & Aging"
+          icon={<Clock size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="register"
+          label="Document Register"
+          icon={<FileText size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="update"
+          label="Update Document"
+          icon={<PencilLine size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="new-document"
+          label="New Document"
+          icon={<FilePlus2 size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="timeline"
+          label="Document Timeline"
+          icon={<History size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="import-export"
+          label="Import / Export"
+          icon={<UploadCloud size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+      </nav>
 
-        {/* Collaboration */}
-        <div style={{ borderBottom: "1px solid var(--border)" }}>
-          <NavGroup label="Collaboration">
-            <NavBtn icon={<FolderOpen size={13} />}   label="Doc Library"        active={activeTab === "library"}   onClick={() => setActiveTab("library")} />
-            <NavBtn icon={<Eye size={13} />}           label="Doc Viewer"         active={activeTab === "viewer"}    onClick={() => setActiveTab("viewer")} />
-            <NavBtn icon={<CheckSquare size={13} />}  label="Task Board"         active={activeTab === "tasks"}     onClick={() => setActiveTab("tasks")} />
-          </NavGroup>
-        </div>
+      {/* Collaboration */}
+      <nav style={sectionStyle}>
+        <p style={sectionTitleStyle}>Collaboration</p>
 
-        {/* Workspace Role */}
-        <div style={{ padding: "10px 10px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", padding: "2px 6px 8px" }}>
-            Workspace Role
-          </p>
-          {user ? (
-            <>
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
-                borderRadius: "var(--radius-md)", background: "var(--bg-subtle)", marginBottom: 6
-              }}>
-                <div style={{
-                  width: 26, height: 26, borderRadius: "50%", background: "var(--accent)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: 700, color: "white", flexShrink: 0
-                }}>
-                  {user.initials}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: 600, fontSize: 11, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {user.name}
-                  </p>
-                  <span className={`badge ${ROLE_COLORS[user.role]}`} style={{ fontSize: 9, padding: "1px 5px", display: "inline-flex", marginTop: 1 }}>
-                    {ROLE_LABELS[user.role]}
-                  </span>
-                </div>
+        <NavButton
+          tab="library"
+          label="Doc Library"
+          icon={<FolderOpen size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="viewer"
+          label="Doc Viewer"
+          icon={<Eye size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="tasks"
+          label="Task Board"
+          icon={<CheckSquare size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+      </nav>
+
+      {/* Persona login */}
+      <div
+        style={{
+          padding: "12px 10px",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <p
+          style={{
+            ...sectionTitleStyle,
+            padding: "4px 6px 8px",
+          }}
+        >
+          Workspace Role
+        </p>
+
+        {user ? (
+          <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 8px",
+                borderRadius: "var(--radius-md)",
+                background: "var(--bg-subtle)",
+                marginBottom: 6,
+              }}
+            >
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: "50%",
+                  background: "var(--accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "white",
+                  flexShrink: 0,
+                }}
+              >
+                {user.initials}
               </div>
-              <button className="nav-item" onClick={() => setUser(null)} style={{ fontSize: 11, color: "var(--text-muted)", padding: "4px 8px" }}>
-                <LogOut size={11} /> Sign out
-              </button>
-            </>
-          ) : (
-            <div style={{ padding: "0 2px" }}>
-              <select className="input" value={selected} onChange={e => setSelected(e.target.value)} style={{ marginBottom: 6, fontSize: 11, padding: "5px 8px" }}>
-                {users.map(u => <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role].split(" ")[0]})</option>)}
-              </select>
-              <button className="btn-primary" style={{ width: "100%", fontSize: 11, padding: "6px", justifyContent: "center" }} onClick={handleLogin}>
-                <LogIn size={11} /> Sign In
-              </button>
-            </div>
-          )}
-        </div>
 
-        {/* System / Utilities */}
-        <NavGroup label="System">
-
-          {/* Filter Panel */}
-          <button
-            style={{
-              display: "flex", alignItems: "center", gap: 8, width: "100%",
-              padding: "7px 10px", borderRadius: "var(--radius-md)",
-              background: filterOpen ? "var(--accent-light)" : "transparent",
-              color: filterOpen ? "var(--accent)" : "var(--text-secondary)",
-              border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
-              fontFamily: "inherit", transition: "all 0.12s"
-            }}
-            onClick={() => toggle("filter")}
-          >
-            <SlidersHorizontal size={13} />
-            <span style={{ flex: 1, textAlign: "left" }}>Filters</span>
-            <ChevronDown size={12} style={{ transform: filterOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s", opacity: 0.5 }} />
-          </button>
-          {filterOpen && (
-            <div style={{
-              margin: "4px 0 8px", background: "var(--bg-app)",
-              border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 10,
-              fontSize: 11, color: "var(--text-secondary)"
-            }}>
-              <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8 }}>GLOBAL FILTERS</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div>
-                  <label style={{ fontSize: 10, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Date From</label>
-                  <input type="date" className="input" style={{ fontSize: 11, padding: "4px 8px", width: "100%" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 10, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Date To</label>
-                  <input type="date" className="input" style={{ fontSize: 11, padding: "4px 8px", width: "100%" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 10, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Discipline</label>
-                  <select className="input" style={{ fontSize: 11, padding: "4px 8px" }}>
-                    <option value="">All</option>
-                    <option>Civil</option>
-                    <option>Mechanical</option>
-                    <option>Electrical</option>
-                    <option>Instrumentation</option>
-                    <option>Piping</option>
-                    <option>Process</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 10, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Approval Code</label>
-                  <select className="input" style={{ fontSize: 11, padding: "4px 8px" }}>
-                    <option value="">All</option>
-                    <option>A1</option>
-                    <option>A2</option>
-                    <option>A3</option>
-                    <option>B1</option>
-                    <option>C1</option>
-                  </select>
-                </div>
-                <button
-                  className="btn-ghost"
-                  style={{ width: "100%", justifyContent: "center", fontSize: 11, padding: "5px" }}
-                >
-                  <RefreshCw size={11} /> Reset Filters
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Notifications */}
-          <button
-            style={{
-              display: "flex", alignItems: "center", gap: 8, width: "100%",
-              padding: "7px 10px", borderRadius: "var(--radius-md)",
-              background: notifOpen ? "var(--accent-light)" : "transparent",
-              color: notifOpen ? "var(--accent)" : "var(--text-secondary)",
-              border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
-              fontFamily: "inherit", transition: "all 0.12s"
-            }}
-            onClick={() => toggle("notif")}
-          >
-            <Bell size={13} />
-            <span style={{ flex: 1, textAlign: "left" }}>Notifications</span>
-            {unread > 0 && (
-              <span style={{
-                minWidth: 18, height: 18, borderRadius: 999, background: "var(--accent)",
-                color: "white", fontSize: 10, fontWeight: 700,
-                display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px"
-              }}>{unread}</span>
-            )}
-            <ChevronDown size={12} style={{ transform: notifOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s", opacity: 0.5 }} />
-          </button>
-          {notifOpen && (
-            <div style={{
-              margin: "4px 0 8px", background: "var(--bg-app)",
-              border: "1px solid var(--border)", borderRadius: "var(--radius-md)", overflow: "hidden"
-            }}>
-              <div style={{ padding: "6px 10px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)" }}>Recent</span>
-                {unread > 0 && (
-                  <button
-                    style={{ fontSize: 10, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}
-                    onClick={() => setNotifs(p => p.map(n => ({ ...n, read: true })))}
-                  >
-                    Mark all read
-                  </button>
-                )}
-              </div>
-              {notifs.map(n => (
-                <div
-                  key={n.id}
-                  onClick={() => setNotifs(p => p.map(x => x.id === n.id ? { ...x, read: true } : x))}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p
                   style={{
-                    padding: "8px 10px", cursor: "pointer",
-                    background: n.read ? "transparent" : "var(--accent-light)",
-                    borderBottom: "1px solid var(--border)"
+                    fontWeight: 600,
+                    fontSize: 11,
+                    color: "var(--text-primary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  <p style={{ fontSize: 11, color: "var(--text-primary)", lineHeight: 1.4 }}>{n.text}</p>
-                  <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{n.time}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Settings */}
-          <button
-            style={{
-              display: "flex", alignItems: "center", gap: 8, width: "100%",
-              padding: "7px 10px", borderRadius: "var(--radius-md)",
-              background: settOpen ? "var(--accent-light)" : "transparent",
-              color: settOpen ? "var(--accent)" : "var(--text-secondary)",
-              border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
-              fontFamily: "inherit", transition: "all 0.12s"
-            }}
-            onClick={() => toggle("sett")}
-          >
-            <Settings size={13} />
-            <span style={{ flex: 1, textAlign: "left" }}>Settings</span>
-            <ChevronDown size={12} style={{ transform: settOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s", opacity: 0.5 }} />
-          </button>
-          {settOpen && (
-            <div style={{
-              margin: "4px 0 8px", background: "var(--bg-app)",
-              border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 10
-            }}>
-              <div style={{ marginBottom: 10 }}>
-                <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>Table rows per page</p>
-                <select className="input" style={{ fontSize: 11, padding: "4px 8px" }} value={pageSize} onChange={e => setPageSize(e.target.value)}>
-                  <option value="25">25 rows</option>
-                  <option value="50">50 rows</option>
-                  <option value="100">100 rows</option>
-                </select>
-              </div>
-              <div style={{ fontSize: 10, color: "var(--text-muted)", paddingTop: 8, borderTop: "1px solid var(--border)" }}>
-                <p style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <Info size={10} /> ProHub v2 · FastAPI + Next.js
+                  {user.name}
                 </p>
+
+                <span
+                  className={`badge ${ROLE_COLORS[user.role]}`}
+                  style={{
+                    fontSize: 9,
+                    padding: "1px 5px",
+                    display: "inline-flex",
+                    marginTop: 1,
+                  }}
+                >
+                  {ROLE_LABELS[user.role]}
+                </span>
               </div>
             </div>
-          )}
-        </NavGroup>
+
+            <button
+              type="button"
+              className="nav-item"
+              onClick={handleLogout}
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                padding: "4px 8px",
+              }}
+            >
+              <LogOut size={11} />
+              Sign out
+            </button>
+          </>
+        ) : (
+          <div style={{ padding: "0 2px" }}>
+            <select
+              className="input"
+              value={selected}
+              disabled={users.length === 0}
+              onChange={(event) => setSelected(event.target.value)}
+              style={{
+                marginBottom: 6,
+                fontSize: 11,
+                padding: "5px 8px",
+              }}
+            >
+              {users.length === 0 ? (
+                <option value="">No users available</option>
+              ) : (
+                users.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name} (
+                    {ROLE_LABELS[candidate.role].split(" ")[0]})
+                  </option>
+                ))
+              )}
+            </select>
+
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!selected}
+              style={{
+                width: "100%",
+                fontSize: 11,
+                padding: 6,
+                justifyContent: "center",
+              }}
+              onClick={handleLogin}
+            >
+              <LogIn size={11} />
+              Sign In
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
-      <div style={{ padding: "8px 12px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-        <p style={{ fontSize: 9, color: "var(--text-muted)", textAlign: "center" }}>DCI ProHub v2.0 · Document Control Intelligence</p>
+      <div
+        style={{
+          padding: "8px 12px",
+          borderTop: "1px solid var(--border)",
+        }}
+      >
+        <p
+          style={{
+            fontSize: 9,
+            color: "var(--text-muted)",
+            textAlign: "center",
+          }}
+        >
+          ProHub v2 · FastAPI + Next.js
+        </p>
       </div>
     </aside>
   );

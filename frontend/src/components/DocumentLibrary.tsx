@@ -30,9 +30,41 @@ interface DocGroup {
 interface Props {
   user: MockUser | null;
   onView: (fileId: string) => void;
+  projectId?: number;
 }
 
-const DEMO_PROJECT_ID = 1;
+type FlatDocumentFile = DocFile & {
+  version_number?: number;
+  revision_label?: string;
+};
+
+function normalizeDocuments(data: unknown): DocGroup[] {
+  if (!Array.isArray(data)) return [];
+  if (data.every(item => item && typeof item === "object" && Array.isArray((item as DocGroup).files))) {
+    return data as DocGroup[];
+  }
+
+  const grouped = new Map<number, DocGroup>();
+  for (const raw of data as FlatDocumentFile[]) {
+    const documentId = Number(raw.document_id);
+    if (!Number.isFinite(documentId)) continue;
+    const current = grouped.get(documentId) ?? {
+      id: documentId,
+      display_name: raw.original_filename || `Document ${documentId}`,
+      files: [],
+      versions: [],
+    };
+    current.files.push(raw);
+    if (raw.version_number !== undefined) {
+      current.versions.push({
+        version_number: raw.version_number,
+        revision_label: raw.revision_label || `Rev-${raw.version_number - 1}`,
+      });
+    }
+    grouped.set(documentId, current);
+  }
+  return Array.from(grouped.values());
+}
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -40,7 +72,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function DocumentLibrary({ user, onView }: Props) {
+export default function DocumentLibrary({ user, onView, projectId = 1 }: Props) {
   const [docs, setDocs] = useState<DocGroup[]>([]);
   const [choices, setChoices] = useState<{ id: number; document_number: string; document_title: string }[]>([]);
   const [linkedDocId, setLinkedDocId] = useState("");
@@ -54,19 +86,19 @@ export default function DocumentLibrary({ user, onView }: Props) {
   const fetchDocs = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getDocuments(DEMO_PROJECT_ID);
-      setDocs(data || []);
+      const data = await getDocuments(projectId);
+      setDocs(normalizeDocuments(data));
     } catch {
       // API not running yet: show empty state
       setDocs([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   React.useEffect(() => {
     fetchDocs();
-    getDCIDocumentChoices(DEMO_PROJECT_ID)
+    getDCIDocumentChoices(projectId)
       .then(setChoices)
       .catch(() => setChoices([]));
   }, [fetchDocs]);
@@ -93,7 +125,7 @@ export default function DocumentLibrary({ user, onView }: Props) {
     try {
       const form = new FormData();
       form.append("file", pendingFile);
-      form.append("project_id", String(DEMO_PROJECT_ID));
+      form.append("project_id", String(projectId));
       form.append("document_name", docName || pendingFile.name);
       form.append("actor_user_id", user.id);
       if (linkedDocId) {

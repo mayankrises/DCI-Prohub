@@ -1,207 +1,134 @@
-"""
-DCI Excel Import / Export Router
-Handles:
-  POST /imports/upload   – parse & store a DCI workbook (.xlsx)
-  GET  /imports/list     – list all imports for a project
-  GET  /imports/export   – export filtered documents as xlsx
-"""
+from __future__ import annotations
+
 import io
-import sys
-import os
+from datetime import datetime, timezone
 
-# Allow imports from project root (dashboard.py functions live there)
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+
+from backend.services.export_service import generate_history_report, generate_updated_workbook
+from backend.services.import_service import import_workbook, preview_workbook
 from repositories.db import get_db_client
 
 router = APIRouter()
 
-DEMO_PROJECT_ID = 1
+
+@router.get("")
+@router.get("/")
+def list_imports(project_id: int | None = None, include_archived: bool = False) -> list[dict]:
+    client = get_db_client()
+    query = client.table("imports").select("*")
+    if project_id is not None:
+        query = query.eq("project_id", project_id)
+    if not include_archived:
+        query = query.neq("import_status", "archived")
+    result = query.order("uploaded_at", desc=True).execute()
+    return result.data or []
 
 
-def _parse_workbook(file_bytes: bytes):
-    """Delegate to dashboard.py's parser – it handles all the layout discovery."""
+@router.post("/preview")
+async def preview_import(file: UploadFile = File(...)) -> dict:
+    content = await file.read()
     try:
-        from dashboard import (
-            parse_workbook_bytes,
-            validate_records,
-            workbook_hash,
-        )
-        records, history, project_name, contractor = parse_workbook_bytes(file_bytes)
-        warnings, errors = validate_records(records)
-        file_hash = workbook_hash(file_bytes)
-        return records, history, project_name, contractor, warnings, errors, file_hash
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Workbook parser unavailable: {e}")
+        return preview_workbook(content, file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/upload")
-async def upload_workbook(
+@router.post("")
+@router.post("/")
+async def upload_import(
     file: UploadFile = File(...),
-    project_id: int = Form(DEMO_PROJECT_ID),
-):
-    if not file.filename.endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
-    
-    file_bytes = await file.read()
-    
+    project_id: int = Form(...),
+    actor_user_id: str = Form("system"),
+    mode: str = Form("replace"),
+) -> dict:
+    if mode not in {"replace", "version", "separate"}:
+        raise HTTPException(status_code=422, detail="mode must be replace, version, or separate.")
+    content = await file.read()
     try:
-        records, history, project_name, contractor, warnings, errors, file_hash = _parse_workbook(file_bytes)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Failed to parse workbook: {str(e)}")
-
-    if errors:
-        raise HTTPException(status_code=422, detail={"errors": errors, "warnings": warnings})
-
-    supabase = get_db_client()
-
-    # Check for duplicate hash
-    existing = supabase.table("imports").select("id").eq("file_hash", file_hash).eq("project_id", project_id).execute()
-    if existing.data:
-        return {
-            "import_id": existing.data[0]["id"],
-            "status": "duplicate",
-            "message": "This workbook has already been imported.",
-            "warnings": warnings,
-            "row_count": len(records),
-        }
-
-    # Create the import record
-    import_res = supabase.table("imports").insert({
-        "project_id": project_id,
-        "display_name": file.filename,
-        "file_hash": file_hash,
-        "row_count": len(records),
-        "import_status": "processing",
-        "project_name": project_name or "",
-        "contractor": contractor or "",
-        "version_number": 1,
-        "review_period_days": 21,
-    }).execute()
-
-    if not import_res.data:
-        raise HTTPException(status_code=500, detail="Failed to create import record.")
-
-    import_id = import_res.data[0]["id"]
-
-    # Bulk insert documents in batches of 200
-    doc_rows = []
-    for r in records:
-        doc_rows.append({
-            "import_id": import_id,
-            "document_number": r.get("doc_no", ""),
-            "document_title": r.get("title", ""),
-            "discipline": r.get("discipline") or "",
-            "vendor": r.get("poc") or "",
-            "status": r.get("status") or "",
-            "approval_code": r.get("latest_code") or "",
-            "revision": r.get("latest_rev") or "",
-            "uploaded_date": r.get("latest_uploaded_date"),
-            "from_eil_date": r.get("latest_from_eil_date"),
-            "schedule_submission_date": r.get("schedule_submission_date"),
-            "age_days": None,
-            "remarks": r.get("remarks") or "",
-        })
-
-    BATCH = 200
-    for i in range(0, len(doc_rows), BATCH):
-        batch = doc_rows[i:i + BATCH]
-        supabase.table("documents").insert(batch).execute()
-
-    # Mark import complete
-    supabase.table("imports").update({"import_status": "complete"}).eq("id", import_id).execute()
-
-    return {
-        "import_id": import_id,
-        "status": "complete",
-        "row_count": len(records),
-        "project_name": project_name,
-        "contractor": contractor,
-        "warnings": warnings,
-        "errors": [],
-    }
+        return import_workbook(
+            get_db_client(),
+            content,
+            file.filename or "workbook.xlsx",
+            project_id,
+            actor_user_id,
+            mode,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.get("/list")
-def list_imports(project_id: int = Query(DEMO_PROJECT_ID)):
-    supabase = get_db_client()
-    res = supabase.table("imports").select(
-        "id, display_name, row_count, import_status, version_number, uploaded_at, project_name, contractor, review_period_days"
-    ).eq("project_id", project_id).order("uploaded_at", desc=True).execute()
-    return res.data or []
+@router.get("/{import_id}/preview")
+def preview_saved_import(import_id: int, limit: int = 20) -> list[dict]:
+    limit = max(1, min(limit, 200))
+    client = get_db_client()
+    result = (
+        client.table("documents")
+        .select(
+            "id,document_number,document_title,discipline,vendor,dci_status,returned_code,revision,"
+            "planned_submission_date,actual_submission_date,review_date,remarks"
+        )
+        .eq("import_id", import_id)
+        .order("original_row_number")
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
 
 
-@router.get("/preview")
-def preview_import(import_id: int = Query(...), limit: int = Query(20)):
-    supabase = get_db_client()
-    res = supabase.table("documents").select(
-        "document_number, document_title, discipline, vendor, status, approval_code, revision, uploaded_date, age_days"
-    ).eq("import_id", import_id).limit(limit).execute()
-    return res.data or []
+def _active_import(project_id: int) -> dict:
+    result = (
+        get_db_client().table("imports")
+        .select("*")
+        .eq("project_id", project_id)
+        .eq("is_active", True)
+        .eq("import_status", "complete")
+        .order("uploaded_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="No active workbook exists for this project.")
+    return result.data[0]
 
 
-@router.get("/export")
-def export_documents(project_id: int = Query(DEMO_PROJECT_ID)):
-    """Export all documents from the latest import as an xlsx file."""
+@router.get("/export/workbook")
+def export_workbook(project_id: int, actor_user_id: str = "system") -> StreamingResponse:
+    client = get_db_client()
+    active = _active_import(project_id)
+    data = generate_updated_workbook(client, active["id"])
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filename = f"DCI_Project_{project_id}_Updated_{stamp}.xlsx"
     try:
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
-    except ImportError:
-        raise HTTPException(status_code=500, detail="openpyxl not installed")
-
-    supabase = get_db_client()
-    # Get latest active import
-    imp_res = supabase.table("imports").select("id, display_name").eq("project_id", project_id)\
-        .eq("import_status", "complete").order("uploaded_at", desc=True).limit(1).execute()
-    if not imp_res.data:
-        raise HTTPException(status_code=404, detail="No completed import found for this project.")
-
-    import_id = imp_res.data[0]["id"]
-    docs_res = supabase.table("documents").select("*").eq("import_id", import_id).execute()
-    docs = docs_res.data or []
-
-    # Build xlsx
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "DCI Register"
-
-    COLS = ["document_number", "document_title", "discipline", "vendor",
-            "status", "approval_code", "revision",
-            "uploaded_date", "from_eil_date", "schedule_submission_date", "age_days", "remarks"]
-    HEADERS = ["Doc No", "Title", "Discipline", "Vendor",
-                "Status", "Approval Code", "Revision",
-                "Last Uploaded", "EIL Return Date", "Scheduled Date", "Age (days)", "Remarks"]
-
-    header_fill = PatternFill("solid", fgColor="E11D48")
-    header_font = Font(color="FFFFFF", bold=True)
-
-    for col_idx, header in enumerate(HEADERS, 1):
-        cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center")
-
-    for row_idx, doc in enumerate(docs, 2):
-        for col_idx, col_key in enumerate(COLS, 1):
-            ws.cell(row=row_idx, column=col_idx, value=doc.get(col_key, ""))
-
-    # Auto-size columns
-    for col in ws.columns:
-        max_len = max((len(str(c.value or "")) for c in col), default=10)
-        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 40)
-
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-
+        client.table("export_records").insert({
+            "import_id": active["id"],
+            "export_type": "workbook",
+            "exported_by": actor_user_id,
+            "filename": filename,
+            "row_count": active.get("row_count", 0),
+            "success": True,
+        }).execute()
+    except Exception:
+        pass
     return StreamingResponse(
-        buf,
+        io.BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=DCI_Export_{import_id}.xlsx"}
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/history")
+def export_history(project_id: int, actor_user_id: str = "system") -> StreamingResponse:
+    client = get_db_client()
+    active = _active_import(project_id)
+    data = generate_history_report(client, active["id"])
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filename = f"DCI_Project_{project_id}_History_{stamp}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

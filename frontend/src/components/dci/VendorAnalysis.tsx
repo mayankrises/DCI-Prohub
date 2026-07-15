@@ -9,7 +9,6 @@ import { getVendorAnalysis, getDisciplineAnalysis } from "@/lib/api";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, ArcElement);
 
-const PROJECT_ID = 1;
 const COLORS = ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#22c55e","#06b6d4","#ef4444","#84cc16","#f97316","#14b8a6"];
 
 const AXIS_OPTS = {
@@ -21,20 +20,20 @@ const AXIS_OPTS = {
   }
 };
 
-export default function VendorAnalysis() {
+export default function VendorAnalysis({ projectId = 1 }: { projectId?: number }) {
   const [vendors, setVendors] = useState<{vendor: string; total: number}[]>([]);
   const [disciplines, setDisciplines] = useState<{discipline: string; total: number}[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.allSettled([
-      getVendorAnalysis(PROJECT_ID),
-      getDisciplineAnalysis(PROJECT_ID),
+      getVendorAnalysis(projectId),
+      getDisciplineAnalysis(projectId),
     ]).then(([v, d]) => {
       if (v.status === "fulfilled") setVendors(v.value);
       if (d.status === "fulfilled") setDisciplines(d.value);
     }).finally(() => setLoading(false));
-  }, []);
+  }, [projectId]);
 
   if (loading) return (
     <div style={{ display: "flex", justifyContent: "center", padding: 48 }}>

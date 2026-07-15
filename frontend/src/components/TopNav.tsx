@@ -1,56 +1,27 @@
 "use client";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Bell, Check, Moon, Save, Settings, Sun, X } from "lucide-react";
 import type { TabId } from "@/app/page";
 import type { MockUser } from "@/lib/auth";
-import { ROLE_LABELS, ROLE_COLORS } from "@/lib/auth";
+import { getDashboardConfig, getMasterData, updateDashboardConfig, updateMasterData, type MasterData } from "@/lib/api";
 
-interface Props {
-  activeTab: TabId;
-  user: MockUser | null;
-}
-
-const TAB_TITLES: Record<TabId, string> = {
-  approval: "Approval Status",
-  vendor: "Vendor Analysis",
-  delays: "Delays & Aging",
-  register: "Document Register",
-  timeline: "Document Timeline",
-  "import-export": "Import / Export",
-  library: "Document Library",
-  viewer: "Document Viewer",
-  tasks: "Task Board",
+const DEFAULT_MASTER: MasterData = {
+  vendors: [], disciplines: [], revisions: ["0","1","2","3","4","5","6","7","8","9"],
+  code_labels: {"1":"Approved","2":"Commented","3":"Resubmission","R":"Retained for Records","V":"Void"},
 };
-
-export default function TopNav({ activeTab, user }: Props) {
-  return (
-    <div className="topnav" style={{ justifyContent: "space-between" }}>
-      {/* Current page location indicator */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>Workspace</span>
-        <span style={{ fontSize: 13, color: "var(--border-strong)" }}>/</span>
-        <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 600 }}>{TAB_TITLES[activeTab]}</span>
-      </div>
-
-      {/* User display */}
-      {user ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <div style={{
-            width: 26, height: 26, borderRadius: "50%",
-            background: "var(--accent)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 700, color: "white"
-          }}>
-            {user.initials}
-          </div>
-          <span style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}>{user.name}</span>
-          <span className={`badge ${ROLE_COLORS[user.role]}`} style={{ fontSize: 10, padding: "2px 6px" }}>{ROLE_LABELS[user.role]}</span>
-        </div>
-      ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <div className="status-dot" style={{ background: "var(--border-strong)" }} />
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Not logged in to collaboration</span>
-        </div>
-      )}
-    </div>
-  );
+const seedNotifications = [
+  { id: 1, title: "5 documents overdue", message: "Review the Delays & Aging dashboard.", read: false },
+  { id: 2, title: "Workbook import complete", message: "The latest DCI data is available.", read: false },
+];
+function lines(value: string) { return value.split("\n").map(x => x.trim()).filter(Boolean); }
+export default function TopNav({activeTab,user,projectId}:{activeTab:TabId;user:MockUser|null;projectId:number}) {
+  const [theme,setTheme]=useState("light"); const [settingsOpen,setSettingsOpen]=useState(false); const [notifOpen,setNotifOpen]=useState(false);
+  const [notifications,setNotifications]=useState(seedNotifications); const [closed,setClosed]=useState("1,R,V"); const [resubmit,setResubmit]=useState("2,3");
+  const [master,setMaster]=useState<MasterData>(DEFAULT_MASTER); const [vendors,setVendors]=useState(""); const [disciplines,setDisciplines]=useState(""); const [revisions,setRevisions]=useState(""); const [codes,setCodes]=useState("");
+  useEffect(()=>{const t=localStorage.getItem("dci.theme")||"light";setTheme(t);document.documentElement.dataset.theme=t;},[]);
+  useEffect(()=>{Promise.all([getDashboardConfig(projectId),getMasterData(projectId)]).then(([config,data])=>{setClosed((config.closed_codes||[]).join(","));setResubmit((config.resubmission_codes||[]).join(","));setMaster(data||DEFAULT_MASTER);setVendors((data.vendors||[]).join("\n"));setDisciplines((data.disciplines||[]).join("\n"));setRevisions((data.revisions||[]).join(","));setCodes(Object.entries(data.code_labels||{}).map(([k,v])=>`${k} = ${v}`).join("\n"));}).catch(()=>{});},[projectId]);
+  const unread=useMemo(()=>notifications.filter(n=>!n.read).length,[notifications]);
+  const toggle=()=>{const t=theme==="light"?"dark":"light";setTheme(t);localStorage.setItem("dci.theme",t);document.documentElement.dataset.theme=t;};
+  const save=async()=>{const codeLabels=Object.fromEntries(lines(codes).map(line=>{const [key,...rest]=line.split("=");return [key.trim(),rest.join("=").trim()]}).filter(([k,v])=>k&&v));await Promise.all([updateDashboardConfig(projectId,{closed_codes:closed.split(",").map(x=>x.trim()).filter(Boolean),resubmission_codes:resubmit.split(",").map(x=>x.trim()).filter(Boolean)}),updateMasterData(projectId,{vendors:lines(vendors),disciplines:lines(disciplines),revisions:revisions.split(",").map(x=>x.trim()).filter(Boolean),code_labels:codeLabels})]);setMaster({vendors:lines(vendors),disciplines:lines(disciplines),revisions:revisions.split(",").map(x=>x.trim()).filter(Boolean),code_labels:codeLabels});setSettingsOpen(false);};
+  return <><header className="topnav"><div style={{fontWeight:700,flex:1,textTransform:"capitalize"}}>{activeTab.replaceAll("-"," ")}</div><button className="icon-button" title="Toggle theme" onClick={toggle}>{theme==="light"?<Moon size={17}/>:<Sun size={17}/>}</button><div style={{position:"relative"}}><button className="icon-button" title="Notifications" onClick={()=>{setNotifOpen(v=>!v);setSettingsOpen(false)}}><Bell size={17}/>{unread>0&&<span className="notification-dot">{unread}</span>}</button>{notifOpen&&<div className="card" style={{position:"absolute",right:0,top:44,width:340,zIndex:100,padding:0,overflow:"hidden"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderBottom:"1px solid var(--border)"}}><strong>Notifications</strong><button className="btn-ghost" style={{fontSize:11}} onClick={()=>setNotifications(v=>v.map(n=>({...n,read:true})))}><Check size={12}/>Mark all read</button></div>{notifications.map(n=><button key={n.id} onClick={()=>setNotifications(v=>v.map(x=>x.id===n.id?{...x,read:true}:x))} style={{display:"block",width:"100%",textAlign:"left",padding:"12px 14px",border:0,borderBottom:"1px solid var(--border)",background:n.read?"var(--bg-panel)":"var(--accent-light)",cursor:"pointer",color:"var(--text-primary)"}}><strong style={{fontSize:12}}>{n.title}</strong><p style={{fontSize:11,color:"var(--text-muted)",marginTop:3}}>{n.message}</p></button>)}</div>}</div><button className="icon-button" title="Settings" onClick={()=>{setSettingsOpen(true);setNotifOpen(false)}}><Settings size={17}/></button>{user&&<span className="badge badge-green">{user.name}</span>}</header>{settingsOpen&&<div className="modal-backdrop"><div className="settings-modal" style={{width:"min(760px,92vw)",maxHeight:"88vh",overflow:"auto"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><h2>Project workflow settings</h2><button className="icon-button" onClick={()=>setSettingsOpen(false)}><X size={17}/></button></div><p style={{fontSize:12,color:"var(--text-muted)",margin:"8px 0 18px"}}>Admin-controlled lists used by Update Document, New Document and lifecycle analytics.</p><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}><label>Vendors <small>One per line</small><textarea className="input" rows={7} value={vendors} onChange={e=>setVendors(e.target.value)}/></label><label>Disciplines <small>One per line</small><textarea className="input" rows={7} value={disciplines} onChange={e=>setDisciplines(e.target.value)}/></label><label>Revision sequence<input className="input" value={revisions} onChange={e=>setRevisions(e.target.value)}/><small>Comma-separated in allowed order</small></label><label>Closed lifecycle codes<input className="input" value={closed} onChange={e=>setClosed(e.target.value)}/><small>Example: 1, R, V</small></label><label>Consultant-action codes<input className="input" value={resubmit} onChange={e=>setResubmit(e.target.value)}/><small>Example: 2, 3</small></label><label style={{gridColumn:"1/-1"}}>Code-to-status mapping <small>One per line: code = meaning</small><textarea className="input" rows={7} value={codes} onChange={e=>setCodes(e.target.value)}/></label></div><button className="btn-primary" style={{marginTop:16}} onClick={save}><Save size={14}/>Save settings</button></div></div>}</>;
 }
