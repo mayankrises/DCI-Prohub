@@ -18,11 +18,13 @@ import DocumentTimeline from "@/components/dci/DocumentTimeline";
 import ProjectHome from "@/components/dci/ProjectHome";
 import UpdateDocument from "@/components/dci/UpdateDocument";
 import NewDocument from "@/components/dci/NewDocument";
+import ExecutiveSummary from "@/components/dci/ExecutiveSummary";
 
 import { MOCK_USERS, type MockUser } from "@/lib/auth";
 
 export type TabId =
   | "home"
+  | "summary"
   | "submission"
   | "review"
   | "approval"
@@ -320,10 +322,12 @@ export default function DashboardPage() {
               selectedProjectId={projectId}
               onSelectProject={selectProject}
               onOpenDashboard={() =>
-                setActiveTab("approval")
+                setActiveTab("summary")
               }
             />
           )}
+
+          {activeTab === "summary" && <ExecutiveSummary projectId={projectId} />}
 
           {activeTab === "submission" && <SubmissionProgress projectId={projectId} />}
 

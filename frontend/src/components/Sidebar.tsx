@@ -204,6 +204,13 @@ export default function Sidebar({
         <p style={sectionTitleStyle}>DCI Dashboard</p>
 
         <NavButton
+          tab="summary"
+          label="Executive Summary"
+          icon={<Home size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
           tab="submission"
           label="Submission Progress"
           icon={<Send size={13} />}

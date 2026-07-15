@@ -97,7 +97,7 @@ export default function UpdateDocument({ projectId, actorUserId = "system" }: { 
         <label style={{ fontSize: 12 }}>Next revision<select className="input" value={form.revision || ""} onChange={e => setForm(v => ({ ...v, revision: e.target.value }))}><option value={form.revision}>{form.revision}</option></select></label>
         <label style={{ fontSize: 12 }}>Review code<select className="input" value={form.returned_code || ""} onChange={e => setForm(v => ({ ...v, returned_code: e.target.value }))}><option value="">No code yet</option>{Object.entries(master.code_labels).map(([code, label]) => <option key={code} value={code}>{code} — {label}</option>)}</select></label>
         <label style={{ fontSize: 12 }}>Automatic status<input className="input" value={automaticStatus} readOnly style={{ background: "var(--bg-subtle)", cursor: "not-allowed" }} /></label>
-        <label style={{ fontSize: 12 }}>Revision date<input className="input" type="date" value={form.revision_date || ""} onChange={e => setForm(v => ({ ...v, revision_date: e.target.value }))} /></label>
+        <label style={{ fontSize: 12 }}>Submission date<input className="input" type="date" value={form.revision_date || ""} onChange={e => setForm(v => ({ ...v, revision_date: e.target.value }))} /></label>
         <label style={{ fontSize: 12 }}>EIL return date<input className="input" type="date" value={form.review_date || ""} onChange={e => setForm(v => ({ ...v, review_date: e.target.value }))} /></label>
         <label style={{ fontSize: 12, gridColumn: "1 / -1" }}>Remarks<textarea className="input" rows={4} value={form.remarks || ""} onChange={e => setForm(v => ({ ...v, remarks: e.target.value }))} /></label>
       </div>

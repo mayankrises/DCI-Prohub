@@ -95,7 +95,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
   }, [fileId, fetchAnnotations, user?.id]);
 
   useEffect(() => {
-    if (!fileId || !user || !hasPermission(user, "add_annotation")) {
+    if (!annotationMode || !fileId || !user || !hasPermission(user, "add_annotation")) {
       setLockLease(null);
       return;
     }
@@ -109,7 +109,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
         if (!active) return;
         acquiredLease = lease;
         setLockLease(lease);
-        setLockMessage(lease.acquired ? "Edit lock acquired" : "This file is currently being edited by another user.");
+        setLockMessage(lease.acquired ? "Edit lock acquired for annotation mode" : `Locked by ${lease.owner || "another user"}. Annotation is read-only.`);
         if (lease.acquired && lease.lock_id && lease.lock_token) {
           heartbeatTimer = setInterval(() => {
             void heartbeatDocumentLock(lease.lock_id!, lease.lock_token!, user.id).catch(() => {
@@ -128,7 +128,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
         void releaseDocumentLock(acquiredLease.lock_id, acquiredLease.lock_token, user.id).catch(() => undefined);
       }
     };
-  }, [fileId, user]);
+  }, [annotationMode, fileId, user]);
 
   const getRelativeCoords = (e: React.MouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -264,7 +264,7 @@ export default function DocumentViewer({ user, fileId }: Props) {
               </button>
             ))}
           </div>
-          <button className={annotationMode ? "btn-primary" : "btn-ghost"} style={{fontSize:12}} onClick={() => setAnnotationMode(v => !v)}>{annotationMode ? "Finish annotating" : "Annotate"}</button>
+          <button className={annotationMode ? "btn-primary" : "btn-ghost"} style={{fontSize:12}} onClick={() => { setPendingGeo(null); setDrawPoints([]); setDrawing(false); setAnnotationMode(v => !v); }}>{annotationMode ? "Finish annotating" : "Annotate"}</button>
           <div style={{ width: 1, height: 20, background: "var(--border)" }} />
           <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Color:</span>
           <div style={{ display: "flex", gap: 5 }}>
@@ -343,8 +343,21 @@ export default function DocumentViewer({ user, fileId }: Props) {
                         }} />
                     );
                   }
+                  if (ann.annotation_type === "freehand") {
+                    const points = (g.points as {x:number;y:number}[] | undefined) || [];
+                    if (points.length < 2) return null;
+                    return <svg key={ann.id} viewBox="0 0 1000 1000" preserveAspectRatio="none" onClick={() => setSelectedAnn(ann)} style={{position:"absolute",inset:0,width:"100%",height:"100%",overflow:"visible",pointerEvents:"auto"}}>
+                      <polyline points={points.map(point => `${point.x*1000},${point.y*1000}`).join(" ")} fill="none" stroke={color} strokeWidth={3} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>;
+                  }
                   return null;
                 })}
+
+                {annotationMode && activeTool === "freehand" && drawPoints.length > 1 && (
+                  <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}>
+                    <polyline points={drawPoints.map(point => `${point.x*1000},${point.y*1000}`).join(" ")} fill="none" stroke={activeColor} strokeWidth={3} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
 
                 {/* Pending annotation preview */}
                 {pendingGeo && activeTool !== "freehand" && activeTool !== "pin" && (
