@@ -34,13 +34,17 @@ export const ROLE_COLORS: Record<string, string> = {
 };
 
 export const PERMISSIONS: Record<string, string[]> = {
-  upload_document:           ["editor", "document_controller", "project_admin"],
-  view_document:             ["reviewer", "editor", "document_controller", "project_admin"],
-  download_original:         ["reviewer", "editor", "document_controller", "project_admin"],
+  upload_document:           ["editor", "document_controller", "project_admin", "consultant_engineer", "consultant_controller"],
+  view_document:             ["reviewer", "editor", "document_controller", "project_admin", "contractor_reviewer", "contractor_controller", "consultant_engineer", "consultant_controller"],
+  download_original:         ["reviewer", "editor", "document_controller", "project_admin", "contractor_reviewer", "contractor_controller", "consultant_engineer", "consultant_controller"],
   add_annotation:            ["reviewer", "editor", "document_controller", "project_admin", "contractor_reviewer", "contractor_controller"],
   resolve_annotation:        ["reviewer", "editor", "document_controller", "project_admin", "contractor_reviewer", "contractor_controller"],
   delete_others_annotation:  ["document_controller", "project_admin"],
   release_lock:              ["document_controller", "project_admin"],
+  create_internal_document:  ["consultant_engineer", "consultant_controller", "project_admin"],
+  respond_internal_crs:      ["consultant_engineer", "consultant_controller", "project_admin"],
+  verify_internal_package:   ["contractor_reviewer", "contractor_controller", "project_admin"],
+  send_to_external_dci:      ["contractor_controller", "project_admin"],
   create_group:              ["document_controller", "project_admin"],
   assign_task:               ["reviewer", "editor", "document_controller", "project_admin"],
   change_task_status:        ["reviewer", "editor", "document_controller", "project_admin"],

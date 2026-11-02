@@ -203,7 +203,7 @@ export default function Sidebar({
 
       {/* DCI Dashboard */}
       <nav style={sectionStyle}>
-        <p style={sectionTitleStyle}>DCI Dashboard</p>
+        <p style={sectionTitleStyle}>External DCI</p>
 
         <NavButton
           tab="summary"
@@ -284,34 +284,41 @@ export default function Sidebar({
         />
       </nav>
 
-      {/* Collaboration */}
+      {/* Inner Circle — internal review is intentionally separate from External DCI. */}
       <nav style={sectionStyle}>
-        <p style={sectionTitleStyle}>Collaboration</p>
+        <p style={sectionTitleStyle}>Inner Circle</p>
 
         <NavButton
-          tab="internal-review"
-          label="Internal Review"
+          tab="internal-dashboard"
+          label="Review Dashboard"
+          icon={<BarChart2 size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="internal-register"
+          label="Internal Register"
           icon={<FileCheck2 size={13} />}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
         />
         <NavButton
-          tab="crs"
-          label="Comment Resolution Sheet"
+          tab="internal-new"
+          label="Upload Internal Doc"
+          icon={<FilePlus2 size={13} />}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+        <NavButton
+          tab="internal-crs"
+          label="Internal CRS"
           icon={<TableProperties size={13} />}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
         />
         <NavButton
-          tab="library"
-          label="Doc Library"
-          icon={<FolderOpen size={13} />}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-        />
-        <NavButton
           tab="viewer"
-          label="Doc Viewer"
+          label="Document Viewer"
           icon={<Eye size={13} />}
           activeTab={activeTab}
           setActiveTab={setActiveTab}

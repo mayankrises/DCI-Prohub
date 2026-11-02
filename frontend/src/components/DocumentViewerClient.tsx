@@ -283,6 +283,7 @@ export default function DocumentViewer({ user, fileId, projectId }: Props) {
       try {
         const data = await getReviewComments(projectId, {
           document_id: resolvedDocumentId,
+          version_id: viewerMeta?.version_id,
         });
         setReviewComments(Array.isArray(data) ? data : []);
       } catch (error) {
@@ -290,7 +291,7 @@ export default function DocumentViewer({ user, fileId, projectId }: Props) {
         setReviewComments([]);
       }
     },
-    [projectId, viewerMeta?.document_id],
+    [projectId, viewerMeta?.document_id, viewerMeta?.version_id],
   );
 
   useEffect(() => {
@@ -323,6 +324,7 @@ export default function DocumentViewer({ user, fileId, projectId }: Props) {
 
         const comments = await getReviewComments(projectId, {
           document_id: documentId,
+          version_id: meta.version_id,
         });
         if (!cancelled) {
           setReviewComments(Array.isArray(comments) ? comments : []);
@@ -774,15 +776,9 @@ export default function DocumentViewer({ user, fileId, projectId }: Props) {
   const visibleReviewComments = reviewComments.filter(
     (comment) => Number(comment.page_number) === pageNumber,
   );
-  // Keep "fit width" and zoom as two separate values.
-  // The PDF page and every annotation layer receive pageRenderWidth.
-  const basePageWidth = Math.max(
-    320,
-    Math.floor(pageViewportWidth - 32),
-  );
   const pageRenderWidth = Math.max(
-    160,
-    Math.round(basePageWidth * zoom),
+    320,
+    Math.floor((pageViewportWidth - 32) * zoom),
   );
 
   const renderArrow = (
@@ -1136,8 +1132,6 @@ export default function DocumentViewer({ user, fileId, projectId }: Props) {
                 overflow: "auto",
                 background: "#2f3136",
                 padding: 16,
-                // Do not constrain a zoomed PDF page back to the viewport width.
-                overscrollBehavior: "contain",
               }}
             >
               <div
@@ -1197,12 +1191,11 @@ export default function DocumentViewer({ user, fileId, projectId }: Props) {
                 <button
                   type="button"
                   className="icon-button"
-                  onClick={() => {
-                    clearDraft();
+                  onClick={() =>
                     setZoom((value) =>
                       Math.max(0.5, Number((value - 0.1).toFixed(2))),
-                    );
-                  }}
+                    )
+                  }
                   title="Zoom out"
                 >
                   <ZoomOut size={16} />
@@ -1215,12 +1208,11 @@ export default function DocumentViewer({ user, fileId, projectId }: Props) {
                 <button
                   type="button"
                   className="icon-button"
-                  onClick={() => {
-                    clearDraft();
+                  onClick={() =>
                     setZoom((value) =>
-                      Math.min(3, Number((value + 0.1).toFixed(2))),
-                    );
-                  }}
+                      Math.min(2.5, Number((value + 0.1).toFixed(2))),
+                    )
+                  }
                   title="Zoom in"
                 >
                   <ZoomIn size={16} />
@@ -1270,7 +1262,6 @@ export default function DocumentViewer({ user, fileId, projectId }: Props) {
                 }
               >
                 <PDFPageSurface
-                  key={`${pageNumber}-${pageRenderWidth}-${rotation}`}
                   ref={canvasRef}
                   pageNumber={pageNumber}
                   width={pageRenderWidth}

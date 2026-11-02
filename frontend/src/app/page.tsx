@@ -21,6 +21,10 @@ import NewDocument from "@/components/dci/NewDocument";
 import ExecutiveSummary from "@/components/dci/ExecutiveSummary";
 import ReviewWorkspace from "@/components/review/ReviewWorkspace";
 import CRSWorkspace from "@/components/review/CRSWorkspace";
+import InternalDashboard from "@/components/internal/InternalDashboard";
+import InternalRegister from "@/components/internal/InternalRegister";
+import NewInternalDocument from "@/components/internal/NewInternalDocument";
+import InternalCRS from "@/components/internal/InternalCRS";
 import ProjectBanner from "@/components/ProjectBanner";
 import { MOCK_USERS, type MockUser } from "@/lib/auth";
 
@@ -40,6 +44,10 @@ export type TabId =
   | "library"
   | "viewer"
   | "tasks"
+  | "internal-dashboard"
+  | "internal-register"
+  | "internal-new"
+  | "internal-crs"
   | "internal-review"
   | "crs";
 
@@ -312,6 +320,15 @@ export default function DashboardPage() {
           activeTab={activeTab}
           user={user}
           projectId={projectId}
+          onOpenNotification={(notification) => {
+            if (notification.entity_type === "review_comment" || notification.entity_type === "response_package") {
+              setActiveTab("internal-crs");
+              return;
+            }
+            if (notification.entity_type === "internal_version") {
+              setActiveTab("internal-register");
+            }
+          }}
         />
 
         <ProjectBanner projectId={projectId} />
@@ -387,16 +404,33 @@ export default function DashboardPage() {
             />
           )}
 
-          {activeTab === "internal-review" && (
-            <ReviewWorkspace
+          {activeTab === "internal-dashboard" && (
+            <InternalDashboard
               projectId={projectId}
-              user={user}
-              onOpenCRS={() => setActiveTab("crs")}
+              onOpenRegister={() => setActiveTab("internal-register")}
+              onOpenCRS={() => setActiveTab("internal-crs")}
             />
           )}
 
-          {activeTab === "crs" && (
-            <CRSWorkspace projectId={projectId} user={user} />
+          {activeTab === "internal-register" && (
+            <InternalRegister
+              projectId={projectId}
+              user={user}
+              onView={handleView}
+              onOpenCRS={() => setActiveTab("internal-crs")}
+            />
+          )}
+
+          {activeTab === "internal-new" && (
+            <NewInternalDocument
+              projectId={projectId}
+              user={user}
+              onCreated={() => setActiveTab("internal-register")}
+            />
+          )}
+
+          {activeTab === "internal-crs" && (
+            <InternalCRS projectId={projectId} user={user} />
           )}
 
           {activeTab === "library" && (

@@ -46,6 +46,8 @@ class CommentCreate(BaseModel):
     raised_by_org: str = "contractor"
     assigned_to: str | None = None
     assigned_org: str = "consultant"
+    internal_document_id: int | None = None
+    internal_version_id: str | None = None
 
 class ResponseCreate(BaseModel):
     response_text: str = Field(min_length=1)
@@ -119,10 +121,11 @@ def create_cycle(payload: CycleCreate):
     return result[0]
 
 @router.get("/comments")
-def list_comments(project_id: int, document_id: int | None = None, review_cycle_id: str | None = None, status: str | None = None, assigned_to: str | None = None):
+def list_comments(project_id: int, document_id: int | None = None, review_cycle_id: str | None = None, version_id: str | None = None, status: str | None = None, assigned_to: str | None = None):
     query = db().table("review_comments").select("*").eq("project_id", project_id)
     if document_id is not None: query = query.eq("document_id", document_id)
     if review_cycle_id: query = query.eq("review_cycle_id", review_cycle_id)
+    if version_id: query = query.eq("version_id", version_id)
     if status: query = query.eq("status", status)
     if assigned_to: query = query.eq("assigned_to", assigned_to)
     return _hydrate_comments(query.order("raised_at", desc=False).execute().data or [])
@@ -133,9 +136,31 @@ def create_comment(payload: CommentCreate):
     number = int(number)
     code = f"C-{number:03d}"
     row = payload.model_dump() | {"comment_number": number, "comment_code": code}
+
+    # Inner Circle versions reuse the existing document viewer records. Infer the
+    # explicit internal document/version context from the viewer file/version so
+    # old annotations never leak onto the next clean version.
+    if not row.get("internal_document_id"):
+        internal = []
+        if payload.document_file_id:
+            internal = db().table("internal_document_versions").select("id,internal_document_id").eq("viewer_file_id", payload.document_file_id).limit(1).execute().data or []
+        if not internal and payload.version_id:
+            internal = db().table("internal_document_versions").select("id,internal_document_id").eq("viewer_version_id", payload.version_id).limit(1).execute().data or []
+        if internal:
+            row["internal_document_id"] = internal[0]["internal_document_id"]
+            row["internal_version_id"] = internal[0]["id"]
+
     result = db().table("review_comments").insert(row).execute().data
     if not result: raise HTTPException(500, "Could not create comment")
     saved = result[0]
+    if saved.get("internal_document_id"):
+        try:
+            db().table("internal_documents").update({
+                "status": "waiting_consultant_response",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", saved["internal_document_id"]).execute()
+        except Exception:
+            pass
     _notify(payload.project_id, payload.assigned_to, f"{code} assigned to you", payload.comment_text, saved["id"])
     return saved
 

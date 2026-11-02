@@ -153,3 +153,25 @@ export const crsExportUrl = (projectId: number, documentId?: number, status?: st
 export const getNotifications = (userId:string) => api.get("/notifications/",{params:{user_id:userId}}).then(r=>r.data);
 export const markNotificationRead = (recipientId:string) => api.post(`/notifications/${recipientId}/read`).then(r=>r.data);
 export const markAllNotificationsRead = (userId:string) => api.post("/notifications/read-all",null,{params:{user_id:userId}}).then(r=>r.data);
+
+// Inner Circle — separate internal review domain
+export const getInternalReviewDashboard = (projectId: number) =>
+  api.get("/internal-review/dashboard", { params: { project_id: projectId } }).then(r => r.data);
+export const getInternalDocuments = (projectId: number, filters: Record<string, string> = {}) =>
+  api.get("/internal-review/documents", { params: { project_id: projectId, ...filters } }).then(r => r.data);
+export const createInternalDocument = (formData: FormData) =>
+  api.post("/internal-review/documents", formData, { headers: { "Content-Type": "multipart/form-data" } }).then(r => r.data);
+export const uploadInternalVersion = (documentId: number, formData: FormData) =>
+  api.post(`/internal-review/documents/${documentId}/versions`, formData, { headers: { "Content-Type": "multipart/form-data" } }).then(r => r.data);
+export const getInternalVersions = (documentId: number) =>
+  api.get(`/internal-review/documents/${documentId}/versions`).then(r => r.data);
+export const getInternalComments = (projectId: number, params: Record<string, unknown> = {}) =>
+  api.get("/internal-review/comments", { params: { project_id: projectId, ...params } }).then(r => r.data);
+export const submitInternalResponsePackage = (formData: FormData) =>
+  api.post("/internal-review/packages/submit", formData, { headers: { "Content-Type": "multipart/form-data" } }).then(r => r.data);
+export const acceptInternalPackage = (packageId: string, payload: Record<string, unknown>) =>
+  api.post(`/internal-review/packages/${packageId}/accept`, payload).then(r => r.data);
+export const sendInternalDocumentToExternal = (documentId: number, payload: Record<string, unknown>) =>
+  api.post(`/internal-review/documents/${documentId}/send-to-external`, payload).then(r => r.data);
+export const getInternalPackages = (projectId: number, documentId?: number) =>
+  api.get("/internal-review/packages", { params: { project_id: projectId, internal_document_id: documentId } }).then(r => r.data);
